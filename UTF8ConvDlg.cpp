@@ -204,10 +204,8 @@ HCURSOR CUTF8ConvDlg::OnQueryDragIcon()
 	return (HCURSOR) m_hIcon;
 }
 
-#include <winldap.h>
-#include <afxpriv.h>
-
 static const char HexChars[] =  {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
+static_assert( _countof( HexChars ) == 16, "HexChars must be 16 characters long" );
 
 // Note: Although this is passed a wide character representation, it's only ever single byte characters, so the upper byte is always 0
 static CString ConvertStringToHexPresentation( wstring_view sUtf )
@@ -231,12 +229,17 @@ static CString ConvertStringToHexPresentation( wstring_view sUtf )
 	return strResults;
 }
 
-static BYTE CharToBin( TCHAR ch )
+constexpr static BYTE CharToBin( TCHAR ch )
 {
 	BYTE Value = 0x0FF;
-
-	BYTE indx;
-	for ( indx = 0; indx < _countof( HexChars ); ++indx )
+#if 1	// Use the modern STL approach
+	auto it = std::ranges::find( HexChars, ch );
+	if ( it != end( HexChars ) )
+	{
+		Value = static_cast<BYTE>( std::distance( begin( HexChars ), it ) );
+	}
+#else	// Use the old fashioned loop (though much less code generated)
+	for ( BYTE indx = 0; indx < _countof( HexChars ); ++indx )
 	{
 		if ( ch == HexChars[indx] )
 		{
@@ -244,7 +247,8 @@ static BYTE CharToBin( TCHAR ch )
 			break;
 		}
 	}
-	_ASSERT( Value != 0x0FF );
+#endif
+	_ASSERT( Value != 0x0FF );	// Should never happen, not called with non-hex characters
 	return Value;
 }
 
@@ -349,7 +353,7 @@ void CUTF8ConvDlg::OnToascii()
 				}
 				else
 				{
-					/* File has non hex characters - abort it */
+					/* Non hex character - abort it */
 					bContentsOK = false;
 					CEdit * pE = static_cast<CEdit*>( GetDlgItem( IDC_HEX_TXT ) );
 					GotoDlgCtrl( pE );
@@ -414,7 +418,7 @@ void CUTF8ConvDlg::OnEnChangeUtf8AsAnsi()
 		GetDlgItemText( IDC_ANSI_TXT, strUtf8 );
 
 		{
-			CString strHex = ConvertStringToHexPresentation( { strUtf8, static_cast<size_t>(strUtf8.GetLength()) } );
+			const CString strHex{ ConvertStringToHexPresentation( { strUtf8, static_cast<size_t>(strUtf8.GetLength()) } ) };
 
 			m_bUpdatingHex = true;
 			SetDlgItemText( IDC_HEX_TXT, strHex );
