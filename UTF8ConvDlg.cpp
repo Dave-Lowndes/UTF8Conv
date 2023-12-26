@@ -6,7 +6,11 @@
 #include "UTF8ConvDlg.h"
 #include <vector>
 #include <string_view>
-using namespace std;
+#include <optional>
+using std::optional;
+using std::nullopt;
+using std::wstring_view;
+using std::vector;
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -204,10 +208,9 @@ HCURSOR CUTF8ConvDlg::OnQueryDragIcon()
 	return (HCURSOR) m_hIcon;
 }
 
-static const char HexChars[] =  {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
-static_assert( _countof( HexChars ) == 16, "HexChars must be 16 characters long" );
-
-// Note: Although this is passed a wide character representation, it's only ever single byte characters, so the upper byte is always 0
+// Note: Although this is passed a wide character representation, it's only
+// ever single byte characters, so the upper byte is always 0 (and ignored in the
+// code).
 static CString ConvertStringToHexPresentation( wstring_view sUtf )
 {
 	const size_t NumChars = sUtf.length();
@@ -218,6 +221,9 @@ static CString ConvertStringToHexPresentation( wstring_view sUtf )
 
 	for ( size_t indx = 0; indx < NumChars; ++indx )
 	{
+		static const char HexChars[] = { '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F' };
+		static_assert(_countof( HexChars ) == 16, "HexChars must be 16 characters long");
+
 		const BYTE ch = static_cast<BYTE>( sUtf[indx] );
 		pszResults[indx*3] = HexChars[( ch >> 4 ) & 0x0f ];
 		pszResults[indx*3 + 1] = HexChars[ ch & 0x0f ];
@@ -229,27 +235,29 @@ static CString ConvertStringToHexPresentation( wstring_view sUtf )
 	return strResults;
 }
 
-constexpr static BYTE CharToBin( TCHAR ch )
+constexpr static optional<BYTE> HexCharToBin( TCHAR ch )
 {
-	BYTE Value = 0x0FF;
-#if 1	// Use the modern STL approach
-	auto it = std::ranges::find( HexChars, ch );
-	if ( it != end( HexChars ) )
+	BYTE Val;
+
+	if ( (ch >= _T( '0' )) && (ch <= _T( '9' )) )
 	{
-		Value = static_cast<BYTE>( std::distance( begin( HexChars ), it ) );
+		Val = ch & 0x0F;
 	}
-#else	// Use the old fashioned loop (though much less code generated)
-	for ( BYTE indx = 0; indx < _countof( HexChars ); ++indx )
+	else if ( (ch >= _T( 'A' )) && (ch <= _T( 'F' )) )
 	{
-		if ( ch == HexChars[indx] )
-		{
-			Value = indx;
-			break;
-		}
+		Val = static_cast<BYTE>( ch - _T( 'A' ) + 10 );
 	}
-#endif
-	_ASSERT( Value != 0x0FF );	// Should never happen, not called with non-hex characters
-	return Value;
+	else if ( (ch >= _T( 'a' )) && (ch <= _T( 'f' )) )
+	{
+		Val = static_cast<BYTE>( ch - _T( 'a' ) + 10 );
+	}
+	else
+	{
+		// Invalid character
+		return nullopt;
+	}
+
+	return Val;
 }
 
 // Bit of a mouthful, but this is what it does:
@@ -339,13 +347,13 @@ void CUTF8ConvDlg::OnToascii()
 					if ( bSecondOfPair )
 					{
 						Value <<= 4;
-						Value += CharToBin( ch );
+						Value += HexCharToBin( ch ).value();
 
 						vBin.push_back( Value );
 					}
 					else
 					{
-						Value = CharToBin( ch );
+						Value = HexCharToBin( ch ).value();
 					}
 
 					/* Next time it's the other way round */
