@@ -58,7 +58,7 @@ BOOL CUTF8ConvApp::InitInstance()
 	{
 		CUTF8ConvDlg dlg;
 		m_pMainWnd = &dlg;
-		int nResponse = dlg.DoModal();
+		const auto nResponse = dlg.DoModal();
 		if (nResponse == IDOK)
 		{
 			// TODO: Place code here to handle when the dialog is
